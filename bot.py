@@ -342,7 +342,7 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-)
+
 
 dp = Dispatcher()
 
