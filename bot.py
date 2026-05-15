@@ -57,28 +57,28 @@ bikes = [
         "name": "DUOTTS S26",
         "price": "1760+ Kč / неделя",
         "description": "Мощный универсальный электровелосипед",
-        "photo": "https://via.placeholder.com/600x400?text=Bike+1"
+        "photo": "photos/bike1.jpg"
     },
     {
         "id": 2,
         "name": "DUOTTS C29",
         "price": "1440+ Kč / неделя",
         "description": "Комфортный велосипед для города",
-        "photo": "https://via.placeholder.com/600x400?text=Bike+2"
+        "photo": "photos/bike2.jpg"
     },
     {
         "id": 3,
         "name": "DUOTTS C29K 2 Battery",
         "price": "1490+ Kč / неделя",
         "description": "С двумя батареями",
-        "photo": "https://via.placeholder.com/600x400?text=Bike+3"
+        "photo": "photos/bike3.jpg"
     },
     {
         "id": 4,
         "name": "Onesport OT08 Pro",
         "price": "1600+ Kč / неделя",
         "description": "Премиум модель",
-        "photo": "https://via.placeholder.com/600x400?text=Bike+4"
+        "photo": "photos/bike4.jpg"
     }
 ]
 
