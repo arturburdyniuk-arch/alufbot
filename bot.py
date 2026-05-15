@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import sqlite3
 
 from dotenv import load_dotenv
 
@@ -15,9 +16,9 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
-    FSInputFile,
     ReplyKeyboardMarkup,
-    KeyboardButton
+    KeyboardButton,
+    FSInputFile
 )
 
 # -------------------
@@ -29,12 +30,286 @@ load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID", "0"))
 
-if not TOKEN:
-    raise Exception("BOT_TOKEN missing")
-
 logging.basicConfig(level=logging.INFO)
 
+bot = Bot(
+    token=TOKEN,
+    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+)
+
+dp = Dispatcher()
+
 # -------------------
+# DATABASE (SQLite CRM)
+# -------------------
+
+conn = sqlite3.connect("crm.db")
+cur = conn.cursor()
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS bikes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT,
+    price TEXT,
+    description TEXT,
+    photo TEXT
+)
+""")
+
+cur.execute("""
+CREATE TABLE IF NOT EXISTS requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    bike TEXT,
+    name TEXT,
+    phone TEXT,
+    user_id INTEGER,
+    status TEXT DEFAULT 'new'
+)
+""")
+
+conn.commit()
+
+
+def get_bikes():
+    return cur.execute("SELECT id, name, price, description, photo FROM bikes").fetchall()
+
+
+def add_request(bike, name, phone, user_id):
+    cur.execute(
+        "INSERT INTO requests (bike, name, phone, user_id) VALUES (?, ?, ?, ?)",
+        (bike, name, phone, user_id)
+    )
+    conn.commit()
+
+
+def get_requests():
+    return cur.execute("SELECT id, bike, name, phone, status FROM requests").fetchall()
+
+
+# -------------------
+# STATES
+# -------------------
+
+class RentForm(StatesGroup):
+    name = State()
+    phone = State()
+
+class AddBike(StatesGroup):
+    name = State()
+    price = State()
+    desc = State()
+    photo = State()
+
+
+# -------------------
+# KEYBOARDS
+# -------------------
+
+def main_menu():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [KeyboardButton(text="🚲 Велосипеды"), KeyboardButton(text="📞 Контакты")],
+            [KeyboardButton(text="🛠 Админ")]
+        ],
+        resize_keyboard=True
+    )
+
+
+def bike_kb(bike_id):
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🚲 Арендовать", callback_data=f"rent_{bike_id}")]
+    ])
+
+
+def admin_kb():
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ Добавить", callback_data="admin_add")],
+        [InlineKeyboardButton(text="📦 Заявки", callback_data="admin_orders")]
+    ])
+
+
+# -------------------
+# START
+# -------------------
+
+@dp.message(CommandStart())
+async def start(message: Message):
+    await message.answer("🚲 Меню:", reply_markup=main_menu())
+
+
+# -------------------
+# MENU BUTTONS
+# -------------------
+
+@dp.message(F.text == "📞 Контакты")
+async def contacts(message: Message):
+    await message.answer(
+        "📍 Jana Masaryka 326/36\n📞 +420774424014"
+    )
+
+
+@dp.message(F.text == "🚲 Велосипеды")
+async def show_bikes(message: Message):
+
+    bikes = get_bikes()
+
+    if not bikes:
+        await message.answer("Нет велосипедов")
+        return
+
+    for b in bikes:
+        text = f"<b>{b[1]}</b>\n💰 {b[2]}\n📝 {b[3]}"
+
+        try:
+            photo = FSInputFile(b[4])
+            await message.answer_photo(photo, caption=text, reply_markup=bike_kb(b[0]))
+        except:
+            await message.answer(text, reply_markup=bike_kb(b[0]))
+
+
+@dp.message(F.text == "🛠 Админ")
+async def admin_panel(message: Message):
+
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    await message.answer("🛠 Admin panel", reply_markup=admin_kb())
+
+
+# -------------------
+# RENT
+# -------------------
+
+@dp.callback_query(F.data.startswith("rent_"))
+async def rent(call: CallbackQuery, state: FSMContext):
+
+    bike_id = int(call.data.split("_")[1])
+    bike = cur.execute("SELECT name FROM bikes WHERE id=?", (bike_id,)).fetchone()
+
+    if not bike:
+        return await call.answer("Not found")
+
+    await state.update_data(bike=bike[0])
+
+    await call.message.answer("Введите имя:")
+    await state.set_state(RentForm.name)
+
+    await call.answer()
+
+
+@dp.message(RentForm.name)
+async def get_name(m: Message, state: FSMContext):
+    await state.update_data(name=m.text)
+    await m.answer("Введите телефон:")
+    await state.set_state(RentForm.phone)
+
+
+@dp.message(RentForm.phone)
+async def get_phone(m: Message, state: FSMContext):
+
+    data = await state.get_data()
+
+    add_request(data["bike"], data["name"], m.text, m.from_user.id)
+
+    await bot.send_message(
+        ADMIN_ID,
+        f"🔥 Заявка\n🚲 {data['bike']}\n👤 {data['name']}\n📞 {m.text}"
+    )
+
+    await m.answer("✅ Принято")
+    await state.clear()
+
+
+# -------------------
+# ADMIN ORDERS
+# -------------------
+
+@dp.callback_query(F.data == "admin_orders")
+async def admin_orders(call: CallbackQuery):
+
+    if call.from_user.id != ADMIN_ID:
+        return await call.answer("No access")
+
+    rows = get_requests()
+
+    if not rows:
+        return await call.message.answer("Нет заявок")
+
+    text = "📦 Заявки:\n\n"
+
+    for r in rows:
+        text += f"#{r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[4]}\n"
+
+    await call.message.answer(text)
+    await call.answer()
+
+
+# -------------------
+# ADD BIKE
+# -------------------
+
+@dp.callback_query(F.data == "admin_add")
+async def add_start(call: CallbackQuery, state: FSMContext):
+
+    if call.from_user.id != ADMIN_ID:
+        return await call.answer()
+
+    await call.message.answer("Название?")
+    await state.set_state(AddBike.name)
+    await call.answer()
+
+
+@dp.message(AddBike.name)
+async def add_name(m: Message, state: FSMContext):
+    await state.update_data(name=m.text)
+    await m.answer("Цена?")
+    await state.set_state(AddBike.price)
+
+
+@dp.message(AddBike.price)
+async def add_price(m: Message, state: FSMContext):
+    await state.update_data(price=m.text)
+    await m.answer("Описание?")
+    await state.set_state(AddBike.desc)
+
+
+@dp.message(AddBike.desc)
+async def add_desc(m: Message, state: FSMContext):
+    await state.update_data(desc=m.text)
+    await m.answer("Фото отправь")
+    await state.set_state(AddBike.photo)
+
+
+@dp.message(AddBike.photo)
+async def add_photo(m: Message, state: FSMContext):
+
+    if not m.photo:
+        return await m.answer("Нужно фото")
+
+    data = await state.get_data()
+
+    cur.execute(
+        "INSERT INTO bikes (name, price, description, photo) VALUES (?, ?, ?, ?)",
+        (data["name"], data["price"], data["desc"], m.photo[-1].file_id)
+    )
+
+    conn.commit()
+
+    await m.answer("✅ Добавлено")
+    await state.clear()
+
+
+# -------------------
+# MAIN
+# -------------------
+
+async def main():
+    print("CRM BOT STARTED")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())# -------------------
 # BOT
 # -------------------
 
