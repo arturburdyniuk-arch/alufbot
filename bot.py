@@ -2,10 +2,12 @@ import asyncio
 import logging
 import os
 
+from dotenv import load_dotenv
+
 from aiogram import Bot, Dispatcher, F
-from aiogram.filters import CommandStart
-from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
+from aiogram.enums import ParseMode
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -13,13 +15,13 @@ from aiogram.types import (
     InlineKeyboardMarkup,
     InlineKeyboardButton,
     CallbackQuery,
+    FSInputFile
 )
-
-from dotenv import load_dotenv
 
 # -------------------
 # ENV
 # -------------------
+
 load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -38,19 +40,28 @@ if not ADMIN_ID:
 ADMIN_ID = int(ADMIN_ID)
 
 # -------------------
+# LOGGING
+# -------------------
+
+logging.basicConfig(level=logging.INFO)
+
+# -------------------
 # BOT INIT
 # -------------------
-logging.basicConfig(level=logging.INFO)
 
 bot = Bot(
     token=TOKEN,
-    default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+    default=DefaultBotProperties(
+        parse_mode=ParseMode.HTML
+    )
 )
+
 dp = Dispatcher()
 
 # -------------------
-# BIKE DATA
+# BIKES
 # -------------------
+
 bikes = [
     {
         "id": 1,
@@ -85,6 +96,7 @@ bikes = [
 # -------------------
 # STATES
 # -------------------
+
 class RentForm(StatesGroup):
     waiting_name = State()
     waiting_phone = State()
@@ -92,11 +104,16 @@ class RentForm(StatesGroup):
 # -------------------
 # START
 # -------------------
+
 @dp.message(CommandStart())
 async def start(message: Message):
-    await message.answer("🚲 Доступные электровелосипеды:")
+
+    await message.answer(
+        "🚲 Доступные электровелосипеды:"
+    )
 
     for bike in bikes:
+
         text = (
             f"<b>{bike['name']}</b>\n\n"
             f"💰 {bike['price']}\n"
@@ -105,87 +122,144 @@ async def start(message: Message):
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="Оставить заявку",
-                    callback_data=f"rent_{bike['id']}"
-                )]
+                [
+                    InlineKeyboardButton(
+                        text="Оставить заявку",
+                        callback_data=f"rent_{bike['id']}"
+                    )
+                ]
             ]
         )
 
         try:
-            from aiogram.types import FSInputFile
+
+            photo = FSInputFile(bike["photo"])
+
+            await message.answer_photo(
+                photo=photo,
                 caption=text,
                 reply_markup=keyboard
             )
+
         except Exception as e:
+
             print("PHOTO ERROR:", e)
-            await message.answer(text, reply_markup=keyboard)
+
+            await message.answer(
+                text,
+                reply_markup=keyboard
+            )
 
 # -------------------
-# RENT
+# RENT BUTTON
 # -------------------
+
 @dp.callback_query(F.data.startswith("rent_"))
 async def rent_bike(callback: CallbackQuery, state: FSMContext):
+
     bike_id = int(callback.data.split("_")[1])
-    bike = next((b for b in bikes if b["id"] == bike_id), None)
+
+    bike = next(
+        (b for b in bikes if b["id"] == bike_id),
+        None
+    )
 
     if not bike:
         await callback.answer("Bike not found")
         return
 
-    await state.update_data(bike_name=bike["name"])
-
-    await callback.message.answer(
-        f"Вы выбрали: <b>{bike['name']}</b>\n\nВведите ваше имя:"
+    await state.update_data(
+        bike_name=bike["name"]
     )
 
-    await state.set_state(RentForm.waiting_name)
+    await callback.message.answer(
+        f"Вы выбрали: <b>{bike['name']}</b>\n\n"
+        "Введите ваше имя:"
+    )
+
+    await state.set_state(
+        RentForm.waiting_name
+    )
+
     await callback.answer()
 
 # -------------------
 # NAME
 # -------------------
+
 @dp.message(RentForm.waiting_name)
 async def get_name(message: Message, state: FSMContext):
-    await state.update_data(name=message.text)
 
-    await message.answer("Введите ваш телефон:")
-    await state.set_state(RentForm.waiting_phone)
+    await state.update_data(
+        name=message.text
+    )
+
+    await message.answer(
+        "Введите ваш телефон:"
+    )
+
+    await state.set_state(
+        RentForm.waiting_phone
+    )
 
 # -------------------
 # PHONE
 # -------------------
+
 @dp.message(RentForm.waiting_phone)
 async def get_phone(message: Message, state: FSMContext):
-    await state.update_data(phone=message.text)
+
+    await state.update_data(
+        phone=message.text
+    )
 
     data = await state.get_data()
 
-    text = (
+    admin_text = (
         "🔥 <b>Новая заявка!</b>\n\n"
         f"🚲 Велосипед: {data['bike_name']}\n"
         f"👤 Имя: {data['name']}\n"
         f"📞 Телефон: {data['phone']}\n"
-        f"🆔 ID: {message.from_user.id}"
+        f"🆔 User ID: {message.from_user.id}"
     )
 
     try:
-        await bot.send_message(ADMIN_ID, text)
+
+        await bot.send_message(
+            ADMIN_ID,
+            admin_text
+        )
+
     except Exception as e:
+
         print("ADMIN SEND ERROR:", e)
 
-    await message.answer("✅ Заявка отправлена!")
+    await message.answer(
+        "✅ Заявка отправлена!\n"
+        "Мы скоро свяжемся с вами."
+    )
+
     await state.clear()
 
 # -------------------
 # MAIN
 # -------------------
+
 async def main():
+
     try:
+
         print("START POLLING...")
+
         await dp.start_polling(bot)
+
     except Exception as e:
+
         print("CRASH:", e)
+
+# -------------------
+# RUN
+# -------------------
 
 if __name__ == "__main__":
     asyncio.run(main())
