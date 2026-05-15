@@ -162,7 +162,7 @@ async def show_bikes(message: Message):
             photo = FSInputFile(b[4])
             await message.answer_photo(photo, caption=text, reply_markup=bike_kb(b[0]))
         except:
-            await message.answer(text, reply_markup=bike_kb(b[0]))
+            await message.answer(text, reply_markup=bike_kb(b[0], message.from_user.id)
 
 # -------------------
 # MENU
