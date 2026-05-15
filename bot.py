@@ -2,6 +2,10 @@ import asyncio
 import logging
 import os
 
+print("START")
+print("TOKEN EXISTS:", bool(os.getenv("BOT_TOKEN")))
+print("ADMIN EXISTS:", os.getenv("ADMIN_ID"))
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.enums import ParseMode
 from aiogram.filters import CommandStart
