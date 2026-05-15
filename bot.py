@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS requests (
 
 conn.commit()
 
+# -------------------
+# SEED
+# -------------------
 
 def seed():
     cur.execute("SELECT COUNT(*) FROM bikes")
@@ -133,11 +136,17 @@ def admin_kb():
     ])
 
 
-def bike_kb(bike_id: int):
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚲 Арендовать", callback_data=f"rent_{bike_id}")],
-        [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"del_{bike_id}")]
-    ])
+def bike_kb(bike_id: int, user_id: int):
+    buttons = [
+        [InlineKeyboardButton(text="🚲 Арендовать", callback_data=f"rent_{bike_id}")]
+    ]
+
+    if user_id == ADMIN_ID:
+        buttons.append([
+            InlineKeyboardButton(text="🗑 Удалить", callback_data=f"del_{bike_id}")
+        ])
+
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 # -------------------
 # START
@@ -160,9 +169,16 @@ async def show_bikes(message: Message):
 
         try:
             photo = FSInputFile(b[4])
-            await message.answer_photo(photo, caption=text, reply_markup=bike_kb(b[0]))
+            await message.answer_photo(
+                photo,
+                caption=text,
+                reply_markup=bike_kb(b[0], message.from_user.id)
+            )
         except:
-            await message.answer(text, reply_markup=bike_kb(b[0], message.from_user.id))
+            await message.answer(
+                text,
+                reply_markup=bike_kb(b[0], message.from_user.id)
+            )
 
 # -------------------
 # MENU
