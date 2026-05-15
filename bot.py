@@ -63,6 +63,20 @@ bikes = [
         "price": "1440+ Kč / неделя",
         "description": "Комфортный велосипед для города",
         "photo": "photos/bike2.jpg"
+    },
+    {
+        "id": 3,
+        "name": "DUOTTS C29K 2 Battery",
+        "price": "1490+ Kč / неделя",
+        "description": "Комфортный велосипед для города с двумя батареями на борту",
+        "photo": "photos/bike3.jpg"
+    },
+    {
+        "id": 4,
+        "name": "Onesport ot08pro",
+        "price": "1600+ Kč / неделя",
+        "description": "Премиум модель с широкими колесами и двумя батареями на борту",
+        "photo": "photos/bike4.jpg"
     }
 ]
 
