@@ -113,8 +113,7 @@ async def start(message: Message):
         )
 
         try:
-            await message.answer_photo(
-                photo=bike["photo"],
+            from aiogram.types import FSInputFile
                 caption=text,
                 reply_markup=keyboard
             )
