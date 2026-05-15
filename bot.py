@@ -88,8 +88,8 @@ def seed():
     bikes = [
         ("DUOTTS S26", "1760 Kč / week", "Мощный универсальный электровелосипед", "photos/bike1.jpg"),
         ("DUOTTS C29", "1440 Kč / week", "Комфортный велосипед для города", "photos/bike2.jpg"),
-        ("DUOTTS C29K 2 Battery", "1490 Kč / week", "С двумя батареями", "photos/bike3.jpg"),
-        ("Onesport OT08 Pro", "1600 Kč / week", "Премиум модель", "photos/bike4.jpg"),
+        ("DUOTTS C29K 2 Battery", "1490 Kč / week", "PRO версия С29 с двумя батареями на борту и гидравлическими тормозами", "photos/bike3.jpg"),
+        ("Onesport OT08 Pro", "1600 Kč / week", "Премиум модель с широкими колесами идеальная для города и брусчатки", "photos/bike4.jpg"),
     ]
 
     cur.executemany(
