@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import (
@@ -115,26 +115,28 @@ class AdminAddBike(StatesGroup):
 # KEYBOARDS
 # -------------------
 
-def main_kb():
-    return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text="🚲 Велосипеды"), KeyboardButton(text="📞 Контакты")],
-            [KeyboardButton(text="🛠 Админ")]
-        ],
-        resize_keyboard=True
-    )
+def main_kb(user_id: int):
+    kb = [
+        [KeyboardButton(text="🚲 Велосипеды"), KeyboardButton(text="📞 Контакты")]
+    ]
+
+    if user_id == ADMIN_ID:
+        kb.append([KeyboardButton(text="🛠 Админ")])
+
+    return ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 
 def admin_kb():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="➕ Добавить", callback_data="admin_add")],
+        [InlineKeyboardButton(text="➕ Добавить велосипед", callback_data="admin_add")],
         [InlineKeyboardButton(text="📦 Заявки", callback_data="admin_orders")]
     ])
 
 
 def bike_kb(bike_id: int):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚲 Арендовать", callback_data=f"rent_{bike_id}")]
+        [InlineKeyboardButton(text="🚲 Арендовать", callback_data=f"rent_{bike_id}")],
+        [InlineKeyboardButton(text="🗑 Удалить", callback_data=f"del_{bike_id}")]
     ])
 
 # -------------------
@@ -143,7 +145,7 @@ def bike_kb(bike_id: int):
 
 @dp.message(CommandStart())
 async def start(m: Message):
-    await m.answer("🚲 Меню", reply_markup=main_kb())
+    await m.answer("🚲 Меню", reply_markup=main_kb(m.from_user.id))
     await show_bikes(m)
 
 # -------------------
@@ -180,7 +182,7 @@ async def bikes(m: Message):
 async def admin(m: Message):
     if m.from_user.id != ADMIN_ID:
         return
-    await m.answer("🛠 Admin", reply_markup=admin_kb())
+    await m.answer("🛠 Admin panel", reply_markup=admin_kb())
 
 # -------------------
 # RENT
@@ -230,6 +232,23 @@ async def phone(m: Message, state: FSMContext):
     await state.clear()
 
 # -------------------
+# DELETE BIKE
+# -------------------
+
+@dp.callback_query(F.data.startswith("del_"))
+async def delete_bike(c: CallbackQuery):
+    if c.from_user.id != ADMIN_ID:
+        return await c.answer("No access")
+
+    bike_id = int(c.data.split("_")[1])
+
+    cur.execute("DELETE FROM bikes WHERE id=?", (bike_id,))
+    conn.commit()
+
+    await c.message.answer("🗑 Удалено")
+    await c.answer()
+
+# -------------------
 # ADMIN ORDERS
 # -------------------
 
@@ -244,12 +263,27 @@ async def orders(m: Message):
     if not rows:
         return await m.answer("Нет заявок")
 
-    text = "📦 Заявки:\n\n"
-
     for r in rows:
-        text += f"#{r[0]} | {r[1]} | {r[2]} | {r[3]}\n"
+        await m.answer(
+            f"#{r[0]} | {r[1]} | {r[2]} | {r[3]}",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Закрыть", callback_data=f"close_{r[0]}")]
+            ])
+        )
 
-    await m.answer(text)
+@dp.callback_query(F.data.startswith("close_"))
+async def close_order(c: CallbackQuery):
+
+    if c.from_user.id != ADMIN_ID:
+        return await c.answer("No access")
+
+    order_id = int(c.data.split("_")[1])
+
+    cur.execute("UPDATE requests SET status='done' WHERE id=?", (order_id,))
+    conn.commit()
+
+    await c.message.answer("✅ Закрыто")
+    await c.answer()
 
 # -------------------
 # ADD BIKE
@@ -282,7 +316,7 @@ async def add_price(m: Message, state: FSMContext):
 @dp.message(AdminAddBike.desc)
 async def add_desc(m: Message, state: FSMContext):
     await state.update_data(desc=m.text)
-    await m.answer("Фото?")
+    await m.answer("Фото отправь")
     await state.set_state(AdminAddBike.photo)
 
 
